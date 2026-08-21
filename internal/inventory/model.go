@@ -110,6 +110,21 @@ func Release(lot Lot, certificateID string, at time.Time) (Lot, LedgerEntry, err
 	return out, entry, nil
 }
 
+func Expire(lot Lot, at time.Time) (Lot, bool, error) {
+	switch {
+	case lot.ID == "" || lot.TenantID == "" || at.IsZero():
+		return lot, false, fmt.Errorf("%w: lot expiry request", domain.ErrInvalid)
+	case lot.Status == LotExpired || lot.Status == LotExhausted || lot.ExpiresAt.After(at):
+		return lot, false, nil
+	case lot.ReservedKg > 0:
+		return lot, false, fmt.Errorf("%w: expired lot still reserved", domain.ErrConflict)
+	}
+	out := lot
+	out.Status = LotExpired
+	out.Version++
+	return out, true, nil
+}
+
 func Allocate(lots []Lot, tenantID, planID, feedCode string, requiredKg float64, at time.Time) (Reservation, []Lot, error) {
 	if tenantID == "" || planID == "" || feedCode == "" || requiredKg <= 0 {
 		return Reservation{}, nil, fmt.Errorf("%w: feed allocation request", domain.ErrInvalid)
